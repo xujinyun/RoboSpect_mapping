@@ -26,6 +26,10 @@
 #include "laserMappingClass.h"
 #include "lidar.h"
 
+// sync odom and pointcloud
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+
 
 LaserMappingClass laserMapping;
 lidar::Lidar lidar_param;
@@ -34,6 +38,19 @@ std::queue<nav_msgs::OdometryConstPtr> odometryBuf;
 std::queue<sensor_msgs::PointCloud2ConstPtr> pointCloudBuf;
 Eigen::Isometry3d last_pose = Eigen::Isometry3d::Identity();
 ros::Publisher map_pub;
+
+void callback(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg, const nav_msgs::Odometry::ConstPtr& msg)
+{
+    // push odometry information to the queue
+    mutex_lock.lock();
+    odometryBuf.push(msg);
+    mutex_lock.unlock();
+    // push pointcloud information to the queue
+    mutex_lock.lock();
+    pointCloudBuf.push(laserCloudMsg);
+    mutex_lock.unlock();
+}
+
 
 void odomCallback(const nav_msgs::Odometry::ConstPtr &msg)
 {
@@ -55,8 +72,11 @@ int update_count = 0;
 int frame_id=0;
 void laser_mapping(){
     while(1){
+        // printf("odometryBuf size: %d \n", odometryBuf.size());
+        // printf("pointCloudBuf size: %d \n", pointCloudBuf.size());
         if(!odometryBuf.empty() && !pointCloudBuf.empty()){
-
+            printf("odom time: %f \n", odometryBuf.front()->header.stamp.toSec());
+            printf("point time: %f \n", pointCloudBuf.front()->header.stamp.toSec());
             //read data
             mutex_lock.lock();
             if(!pointCloudBuf.empty() && pointCloudBuf.front()->header.stamp.toSec()<odometryBuf.front()->header.stamp.toSec()-0.5*lidar_param.scan_period){
@@ -68,11 +88,9 @@ void laser_mapping(){
 
             if(!odometryBuf.empty() && odometryBuf.front()->header.stamp.toSec() < pointCloudBuf.front()->header.stamp.toSec()-0.5*lidar_param.scan_period){
                 odometryBuf.pop();
-                // printf("now time: %f \n", ros::Time::now().toSec());
-                // printf("empty: %d\n", odometryBuf.empty());
-                // printf("odom time: %f\n", odometryBuf.front()->header.stamp.toSec());
-                // printf("point time: %f\n", pointCloudBuf.front()->header.stamp.toSec());
-                // printf("scan period: %f\n", lidar_param.scan_period);
+                // printf("empty: %d", odometryBuf.empty());
+                
+                // printf("scan period: %f", lidar_param.scan_period);
 
                 ROS_INFO("time stamp unaligned with path final, pls check your data --> laser mapping node");
                 mutex_lock.unlock();
@@ -117,7 +135,7 @@ void laser_mapping(){
 
         }
         //sleep 2 ms every time
-        std::chrono::milliseconds dura(100);
+        std::chrono::milliseconds dura(2);
         std::this_thread::sleep_for(dura);
     }
 }
@@ -148,15 +166,18 @@ int main(int argc, char **argv)
     
     laserMapping.init(map_resolution);
     last_pose.translation().x() = 10;
-    ros::Subscriber subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points_filtered", 100, velodyneHandler);
-    ros::Subscriber subOdometry = nh.subscribe<nav_msgs::Odometry>("/odom", 100, odomCallback);
+    // ros::Subscriber subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points_filtered", 100, velodyneHandler);
+    // ros::Subscriber subOdometry = nh.subscribe<nav_msgs::Odometry>("/odom", 100, odomCallback);
 
-    // advertise: tell ROS want to publish
+    message_filters::Subscriber<sensor_msgs::PointCloud2> subLaserCloud(nh, "/velodyne_points_filtered", 100);
+    message_filters::Subscriber<nav_msgs::Odometry> subOdometry(nh, "/odom", 100);
+    message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, nav_msgs::Odometry> sync(subLaserCloud, subOdometry, 100);
+    sync.registerCallback(boost::bind(&callback, _1, _2));
+    
+
     map_pub = nh.advertise<sensor_msgs::PointCloud2>("/map", 100);
 
-    // Q: what does the thread do
-    // Does it mean running the laser_mapping function same time with the map publisher?
-    // If yes, why the publisher can run continuously instead of only one time
+    
     std::thread laser_mapping_process{laser_mapping};
 
     ros::spin();

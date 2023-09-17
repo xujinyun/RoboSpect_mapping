@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <launch>
 
-    <node pkg="rosbag" type="play" name="rosbag_play" args="--clock $(env HOME)/Downloads/L515_test.bag"/> 
+    <!-- Play rosbag -->
+    <node pkg="rosbag" type="play" name="rosbag_play" args="--clock $(env HOME)/L515_data/L515_test.bag"/> 
     <param name="/use_sim_time" value="true" />
 
     <param name="scan_period" value="0.1" />

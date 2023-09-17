@@ -37,15 +37,12 @@ ros::Publisher pubEdgePoints;
 ros::Publisher pubSurfPoints;
 ros::Publisher pubLaserCloudFiltered;
 
-// creat a int vevtor to store the size of each scan
-std::vector<int> scan_size_before_filter;
-std::vector<int> scan_size_after_filter;
-
-
 void velodyneHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
 {
+    
     mutex_lock.lock();
     pointCloudBuf.push(laserCloudMsg);
+    printf("recieved pointcloud\n");
     mutex_lock.unlock();
    
 }
@@ -55,6 +52,7 @@ int total_frame=0;
 int frame_count =0;
 void laser_processing(){
     while(1){
+        // printf("Empty pointcloud %d\n", pointCloudBuf.empty());
         if(!pointCloudBuf.empty()){
             //read data
             mutex_lock.lock();
@@ -74,18 +72,14 @@ void laser_processing(){
 
             std::chrono::time_point<std::chrono::system_clock> start, end;
             start = std::chrono::system_clock::now();
-            std::cout<<"Total points before filter: "<<pointcloud_in->points.size()<<std::endl;
+            printf("pointcloud size %d\n", pointcloud_in->size());
             laserProcessing.featureExtraction(pointcloud_in,pointcloud_edge,pointcloud_surf);
-            std::cout<<"Total points after filter: "<<pointcloud_edge->points.size()+pointcloud_surf->points.size()<<std::endl;
+            printf("edge size %d\n", pointcloud_edge->size());
+            printf("surf size %d\n", pointcloud_surf->size());
             end = std::chrono::system_clock::now();
             std::chrono::duration<float> elapsed_seconds = end - start;
             total_frame++;
-            // open the file and save Total points before filter and after filter to file
-            std::ofstream outfile;
-            outfile.open("/home/jinyun/L515SLAM/src/ssl_slam/src/points_filter.txt", std::ios::app);
-            outfile << pointcloud_in->points.size()<< " " << pointcloud_edge->points.size()+pointcloud_surf->points.size()<< " " <<pointcloud_edge->points.size()<< " " << pointcloud_surf->points.size()<<std::endl;
-            outfile.close();
-            
+
 
             float time_temp = elapsed_seconds.count() * 1000;
             total_time+=time_temp;

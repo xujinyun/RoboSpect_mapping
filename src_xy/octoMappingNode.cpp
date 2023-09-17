@@ -17,27 +17,32 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 
+//octomap gridmap
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
+#include <octomap_ros/conversions.h>
+#include <octomap/octomap.h>
+#include <octomap/ColorOcTree.h>
+
 //pcl lib
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
 //local lib
-#include "laserMappingClass.h"
+#include "octoMappingClass.h"
 #include "lidar.h"
 
 
-LaserMappingClass laserMapping;
+OctoMappingClass octoMapping;
 lidar::Lidar lidar_param;
 std::mutex mutex_lock;
 std::queue<nav_msgs::OdometryConstPtr> odometryBuf;
 std::queue<sensor_msgs::PointCloud2ConstPtr> pointCloudBuf;
-Eigen::Isometry3d last_pose = Eigen::Isometry3d::Identity();
-ros::Publisher map_pub;
-
+double map_resolution = 0.1;
+ros::Publisher octo_map_pub;
 void odomCallback(const nav_msgs::Odometry::ConstPtr &msg)
 {
-    // push odometry information to the queue
     mutex_lock.lock();
     odometryBuf.push(msg);
     mutex_lock.unlock();
@@ -45,15 +50,14 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr &msg)
 
 void velodyneHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
 {
-    // push pointcloud information to the queue
     mutex_lock.lock();
     pointCloudBuf.push(laserCloudMsg);
     mutex_lock.unlock();
 }
 
-int update_count = 0;
-int frame_id=0;
-void laser_mapping(){
+int total_frame =0;
+
+void octo_mapping(){
     while(1){
         if(!odometryBuf.empty() && !pointCloudBuf.empty()){
 
@@ -68,12 +72,6 @@ void laser_mapping(){
 
             if(!odometryBuf.empty() && odometryBuf.front()->header.stamp.toSec() < pointCloudBuf.front()->header.stamp.toSec()-0.5*lidar_param.scan_period){
                 odometryBuf.pop();
-                // printf("now time: %f \n", ros::Time::now().toSec());
-                // printf("empty: %d\n", odometryBuf.empty());
-                // printf("odom time: %f\n", odometryBuf.front()->header.stamp.toSec());
-                // printf("point time: %f\n", pointCloudBuf.front()->header.stamp.toSec());
-                // printf("scan period: %f\n", lidar_param.scan_period);
-
                 ROS_INFO("time stamp unaligned with path final, pls check your data --> laser mapping node");
                 mutex_lock.unlock();
                 continue;  
@@ -91,33 +89,28 @@ void laser_mapping(){
             odometryBuf.pop();
             mutex_lock.unlock();
             
-            
-            update_count++;
-            Eigen::Isometry3d delta_transform = last_pose.inverse() * current_pose;
-            double displacement = delta_transform.translation().squaredNorm();
-            double angular_change = delta_transform.linear().eulerAngles(2,1,0)[0]* 180 / M_PI;
 
-            if(angular_change>90) angular_change = fabs(180 - angular_change);
-            
-            if(displacement>0.3 || angular_change>20){
-                //ROS_INFO("update map %f,%f",displacement,angular_change);
-                last_pose = current_pose;
-                laserMapping.updateCurrentPointsToMap(pointcloud_in,current_pose);
+            std::chrono::time_point<std::chrono::system_clock> start, end;
+            start = std::chrono::system_clock::now();
+            octoMapping.updateLocalMap(pointcloud_in,current_pose);
 
-                pcl::PointCloud<pcl::PointXYZRGB>::Ptr pc_map = laserMapping.getMap();
-                sensor_msgs::PointCloud2 PointsMsg;
-                pcl::toROSMsg(*pc_map, PointsMsg);
-                PointsMsg.header.stamp = pointcloud_time;
-                PointsMsg.header.frame_id = "map";
-                // Actual pulish
-                map_pub.publish(PointsMsg); 
-            }
-            
+            end = std::chrono::system_clock::now();
+            std::chrono::duration<float> elapsed_seconds = end - start;
+            total_frame++;
+            octomap::ColorOcTree* octo_map = octoMapping.getMap();
 
+            // publish octomap
+            octomap_msgs::Octomap octomapMsg;
+            octomapMsg.header.stamp = pointcloud_time;
+            octomapMsg.header.frame_id = "map";
+            octomapMsg.id = 1 ;
+            octomapMsg.resolution = map_resolution;
+            bool res = octomap_msgs::fullMapToMsg(*octo_map, octomapMsg);
+            octo_map_pub.publish(octomapMsg); 
 
         }
         //sleep 2 ms every time
-        std::chrono::milliseconds dura(100);
+        std::chrono::milliseconds dura(2);
         std::this_thread::sleep_for(dura);
     }
 }
@@ -132,32 +125,25 @@ int main(int argc, char **argv)
     double scan_period= 0.1;
     double max_dis = 60.0;
     double min_dis = 2.0;
-    double map_resolution = 0.4;
-    nh.getParam("/scan_period", scan_period); 
+
+    nh.getParam("/map_resolution", map_resolution); 
     nh.getParam("/vertical_angle", vertical_angle); 
     nh.getParam("/max_dis", max_dis);
     nh.getParam("/min_dis", min_dis);
     nh.getParam("/scan_line", scan_line);
-    nh.getParam("/map_resolution", map_resolution);
 
     lidar_param.setScanPeriod(scan_period);
     lidar_param.setVerticalAngle(vertical_angle);
     lidar_param.setLines(scan_line);
     lidar_param.setMaxDistance(max_dis);
     lidar_param.setMinDistance(min_dis);
-    
-    laserMapping.init(map_resolution);
-    last_pose.translation().x() = 10;
+
+    octoMapping.init(map_resolution);
     ros::Subscriber subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_points_filtered", 100, velodyneHandler);
     ros::Subscriber subOdometry = nh.subscribe<nav_msgs::Odometry>("/odom", 100, odomCallback);
 
-    // advertise: tell ROS want to publish
-    map_pub = nh.advertise<sensor_msgs::PointCloud2>("/map", 100);
-
-    // Q: what does the thread do
-    // Does it mean running the laser_mapping function same time with the map publisher?
-    // If yes, why the publisher can run continuously instead of only one time
-    std::thread laser_mapping_process{laser_mapping};
+    octo_map_pub = nh.advertise<octomap_msgs::Octomap>("/octo_map", 100);
+    std::thread octo_mapping_process{octo_mapping};
 
     ros::spin();
 

@@ -43,6 +43,7 @@ class OdomEstimationClass
 		void initMapWithPoints(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& edge_in, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& surf_in);
 		void updatePointsToMap(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& edge_in, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& surf_in);
 		void getMap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& laserCloudMap);
+		void updateStateToMap(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& edge_in, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& surf_in, const Eigen::Isometry3d odom_in);
 
 		Eigen::Isometry3d odom;
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudCornerMap;
