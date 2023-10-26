@@ -215,28 +215,28 @@ void odom_estimation()
     }
 }
 
-void odomHandler(const gazebo_msgs::ModelStatesConstPtr &state)
+void odomHandler(const nav_msgs::Odometry::ConstPtr &state)
 {
     // get state of the model named "pipe_robot"
     // gazebo_msgs::GetModelState objstate;
     // objstate.request.model_name = "pipe_robot";
-    int index = 0;
-    for (index; index < state->name.size(); index++)
-    {
-        if (state->name[index] == "pipe_robot_with_sensor")
-        {
-            break;
-        }
-    }
+    // int index = 0;
+    // for (index; index < state->name.size(); index++)
+    // {
+    //     if (state->name[index] == "pipe_robot_with_sensor")
+    //     {
+    //         break;
+    //     }
+    // }
     // printf("index: %d\n", index);
     // exit(0);
-    double position_x = state->pose[index].position.x;
-    double position_y = state->pose[index].position.y;
-    double position_z = state->pose[index].position.z;
-    double orientation_x = state->pose[index].orientation.x;
-    double orientation_y = state->pose[index].orientation.y;
-    double orientation_z = state->pose[index].orientation.z;
-    double orientation_w = state->pose[index].orientation.w;
+    double position_x = state->pose.pose.position.x;
+    double position_y = state->pose.pose.position.y;
+    double position_z = state->pose.pose.position.z;
+    double orientation_x = state->pose.pose.position.x;
+    double orientation_y = state->pose.pose.orientation.y;
+    double orientation_z = state->pose.pose.orientation.z;
+    double orientation_w = state->pose.pose.orientation.w;
 
     // static tf::TransformBroadcaster br;
     // tf::Transform transform;
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
     ros::Subscriber subSurfLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surf", 100, velodyneSurfHandler);
 
     // Subscribe to the odometry topic from Gazebo directly
-    ros::Subscriber subOdom = nh.subscribe<gazebo_msgs::ModelStates>("/gazebo/model_states", 100, odomHandler);
+    ros::Subscriber subOdom = nh.subscribe<nav_msgs::Odometry>("/vins_estimator/odometry", 100, odomHandler);
 
     pubLaserOdometry = nh.advertise<nav_msgs::Odometry>("/odom", 100);
     std::thread odom_estimation_process{odom_estimation};

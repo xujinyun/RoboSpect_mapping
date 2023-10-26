@@ -1,0 +1,13 @@
+<launch>
+  <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager"/>
+
+  <node pkg="nodelet" type="nodelet" name="depth_image_proc" args="load depth_image_proc/point_cloud_xyz_radial standalone_nodelet" output="screen">
+    <remap from="image_raw" to="/camera/depth/image_rect_raw"/>
+    <!--remap from="/airsim_node/drone0/cam/camera_info" to="/camera/depth/camera_info"/-->
+    <param name="queue_size" type="int" value="1"/>
+    <remap from="/points" to="/camera/depth/color/points"/>
+  </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="depth_optical_frame_pub" args="0 0 0 0 0 0 camera_depth_optical_frame map 100"/>
+  
+</launch>
