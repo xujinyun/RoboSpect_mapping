@@ -84,6 +84,9 @@ void laser_mapping(){
             pcl::fromROSMsg(*pointCloudBuf.front(), *pointcloud_in);
             ros::Time pointcloud_time = (pointCloudBuf.front())->header.stamp;
 
+            std::cout<<"Mapping raw data size: "<<pointcloud_in->points.size()<<std::endl;
+
+
             Eigen::Isometry3d current_pose = Eigen::Isometry3d::Identity();
             current_pose.rotate(Eigen::Quaterniond(odometryBuf.front()->pose.pose.orientation.w,odometryBuf.front()->pose.pose.orientation.x,odometryBuf.front()->pose.pose.orientation.y,odometryBuf.front()->pose.pose.orientation.z));  
             current_pose.pretranslate(Eigen::Vector3d(odometryBuf.front()->pose.pose.position.x,odometryBuf.front()->pose.pose.position.y,odometryBuf.front()->pose.pose.position.z));
@@ -99,12 +102,13 @@ void laser_mapping(){
 
             if(angular_change>90) angular_change = fabs(180 - angular_change);
             
-            if(displacement>0.3 || angular_change>20){
+            if(displacement>0.01 || angular_change>20){
                 //ROS_INFO("update map %f,%f",displacement,angular_change);
                 last_pose = current_pose;
                 laserMapping.updateCurrentPointsToMap(pointcloud_in,current_pose);
 
                 pcl::PointCloud<pcl::PointXYZRGB>::Ptr pc_map = laserMapping.getMap();
+                std::cout << "Actual publish size: " << pc_map->points.size() << std::endl;
                 sensor_msgs::PointCloud2 PointsMsg;
                 pcl::toROSMsg(*pc_map, PointsMsg);
                 PointsMsg.header.stamp = pointcloud_time;

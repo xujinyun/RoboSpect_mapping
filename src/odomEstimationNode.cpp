@@ -192,7 +192,14 @@ void odom_estimation()
             tf::Transform transform;
             transform.setOrigin(tf::Vector3(t_current.x(), t_current.y(), t_current.z()));
             tf::Quaternion q(q_current.x(), q_current.y(), q_current.z(), q_current.w());
+            // tf::Quaternion original_quat(q_current.x(), q_current.y(), q_current.z(), q_current.w());
+            // tf::Quaternion rotation_correction;
+            // rotation_correction.setRPY(-M_PI / 2, 0, 0);  // Rotate -90 degrees around the X-axis
+            // tf::Quaternion corrected_quat = rotation_correction * original_quat;
+            // corrected_quat.normalize();
+
             transform.setRotation(q);
+            // transform.setRotation(corrected_quat);
             br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
 
             // publish odometry
@@ -233,7 +240,7 @@ void odomHandler(const nav_msgs::Odometry::ConstPtr &state)
     double position_x = state->pose.pose.position.x;
     double position_y = state->pose.pose.position.y;
     double position_z = state->pose.pose.position.z;
-    double orientation_x = state->pose.pose.position.x;
+    double orientation_x = state->pose.pose.orientation.x;
     double orientation_y = state->pose.pose.orientation.y;
     double orientation_z = state->pose.pose.orientation.z;
     double orientation_w = state->pose.pose.orientation.w;
@@ -290,7 +297,7 @@ int main(int argc, char **argv)
     ros::Subscriber subSurfLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surf", 100, velodyneSurfHandler);
 
     // Subscribe to the odometry topic from Gazebo directly
-    ros::Subscriber subOdom = nh.subscribe<nav_msgs::Odometry>("/vins_estimator/odometry", 100, odomHandler);
+    ros::Subscriber subOdom = nh.subscribe<nav_msgs::Odometry>("/encoder_odom", 100, odomHandler);
 
     pubLaserOdometry = nh.advertise<nav_msgs::Odometry>("/odom", 100);
     std::thread odom_estimation_process{odom_estimation};

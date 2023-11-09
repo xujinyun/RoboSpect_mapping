@@ -2,7 +2,7 @@
 <launch>
 
     <!-- Play rosbag -->
-    <node pkg="rosbag" type="play" name="rosbag_play" args="--clock $(env HOME)/L515_data/out.bag"/> 
+    <node pkg="rosbag" type="play" name="rosbag_play" args="--clock $(env HOME)/L515_data/2023-11-01-17-36-38.bag"/> 
     <param name="/use_sim_time" value="true" />
 
     <param name="scan_period" value="0.1" />
